@@ -1,0 +1,64 @@
+version: "3.8"
+
+# ============================================================
+#  PIB Video Pipeline: Java + Python (FastAPI) + PostgreSQL
+# ============================================================
+
+services:
+  # 1️⃣ PostgreSQL Database
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: pib_postgres_db_compose
+    restart: always
+    environment:
+      - POSTGRES_USER=pibuser
+      - POSTGRES_PASSWORD=pibpassword
+      - POSTGRES_DB=pibdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2️⃣ Java Spring Boot API (Video Synthesis Service)
+  video-synthesis-service:
+    build: ./video-synthesis-service
+    container_name: pib_java_api
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres-db
+      - video-generation-service
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/pibdb
+      - SPRING_DATASOURCE_USERNAME=pibuser
+      - SPRING_DATASOURCE_PASSWORD=pibpassword
+      # ✅ FIXED: Correct internal Docker network URL
+      - PYTHON_SERVICE_BASE_URL=http://video-generation-service:8000
+      # ✅ ADDED: Public-facing video URL for frontend
+      - VIDEO_PUBLIC_BASE_URL=http://localhost:8000/videos
+
+  # 3️⃣ Python FastAPI Worker (Video Generation Service)
+  video-generation-service:
+    build: ./video-generation-service
+    container_name: pib_python_worker
+    restart: on-failure
+    ports:
+      - "8000:8000"
+    environment:
+      # ✅ FIXED: This should be the public URL that browsers can access
+      - APP_BASE_URL=http://localhost:8000
+      
+      # Optional environment variables for AI / image APIs
+      # - GEMINI_API_KEY=your_gemini_api_key_here
+      # - UNSPLASH_ACCESS_KEY=your_unsplash_api_key_here
+
+    volumes:
+      - ./video-generation-service/generated_videos:/app/generated_videos
+      - ./video-generation-service/assets:/app/assets
+
+# ============================================================
+#  Named Volumes
+# ============================================================
+volumes:
+  postgres_data:

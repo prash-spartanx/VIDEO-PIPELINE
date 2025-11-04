@@ -1,0 +1,84 @@
+===================================================
+
+1. Java / Spring Boot / Maven / IntelliJ
+
+===================================================
+
+Build output
+
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+IntelliJ
+
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+Compiled Java class files
+
+*.class
+
+Log files
+
+*.log
+.log.
+
+===================================================
+
+2. Python / FastAPI / venv
+
+===================================================
+
+Virtual environment
+
+.venv/
+venv/
+env/
+pycache/
+*.py[cod]
+
+Environment variables
+
+.env
+.env
+.env.
+
+===================================================
+
+3. Your Project-Specific Files (NEW RULES)
+
+===================================================
+
+Ignore ALL generated videos
+
+video-generation-service/generated_videos/
+video-generation-service/tmp_videos/
+
+Ignore large media assets.
+
+Use Git LFS for assets you must track (see below)
+
+video-generation-service/assets/
+*.mp3
+*.mp4
+*.jpg
+*.jpeg
+*.png
+*.zip
+
+===================================================
+
+4. OS / General
+
+===================================================
+
+.DS_Store
