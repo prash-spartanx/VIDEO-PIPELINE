@@ -1,0 +1,8 @@
+ALTER TABLE press_releases
+  ALTER COLUMN content TYPE TEXT;
+
+ALTER TABLE press_releases
+  ALTER COLUMN title TYPE VARCHAR(512);
+
+ALTER TABLE press_releases
+  ALTER COLUMN link TYPE VARCHAR(1024);

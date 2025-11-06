@@ -1,8 +1,16 @@
 package com.prashant.pib.video_synthesis_service.service;
 
-import com.prashant.pib.video_synthesis_service.dto.*;
-import com.prashant.pib.video_synthesis_service.entity.*;
-import com.prashant.pib.video_synthesis_service.repository.*;
+import com.prashant.pib.video_synthesis_service.dto.GeneratedVideoResponse;
+import com.prashant.pib.video_synthesis_service.dto.PublishVideoRequest;
+import com.prashant.pib.video_synthesis_service.dto.PythonJobResponse;
+import com.prashant.pib.video_synthesis_service.dto.PythonStatusResponse;
+import com.prashant.pib.video_synthesis_service.entity.GeneratedVideo;
+import com.prashant.pib.video_synthesis_service.entity.PressRelease;
+import com.prashant.pib.video_synthesis_service.entity.User;
+import com.prashant.pib.video_synthesis_service.entity.VideoStatus;
+import com.prashant.pib.video_synthesis_service.repository.GeneratedVideoRepository;
+import com.prashant.pib.video_synthesis_service.repository.PressReleaseRepository;
+import com.prashant.pib.video_synthesis_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -31,24 +40,19 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
     @Value("${python.service.base-url}")
     private String pythonServiceBaseUrl;
 
-    // ✅ Define the base URL that your frontend can access for videos
     @Value("${video.public-base-url:http://localhost:5001/videos}")
     private String videoPublicBaseUrl;
 
-    // ----------------------------
-    // POLLER
-    // ----------------------------
+    // ---------- POLLER ----------
     @Scheduled(fixedDelay = 15000)
     @Transactional
     public void pollAndUpdateVideoStatuses() {
         log.info("POLLER: Running scheduled task to update video statuses.");
         List<GeneratedVideo> processingVideos = generatedVideoRepository.findByStatus(VideoStatus.PROCESSING);
-
         if (processingVideos.isEmpty()) {
             log.info("POLLER: No videos in PROCESSING state. Task complete.");
             return;
         }
-
         for (GeneratedVideo video : processingVideos) {
             log.info("POLLER: Checking status for video ID {} (Job ID: {})", video.getId(), video.getJobId());
             updateVideoStatus(video);
@@ -56,21 +60,36 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
         log.info("POLLER: Finished status check for all processing videos.");
     }
 
-    // ----------------------------
-    // GENERATE VIDEO
-    // ----------------------------
+    // ---------- GENERATE ----------
     @Override
     @Transactional
     public GeneratedVideoResponse generateVideo(Long pressReleaseId, String username) {
-        log.info("Initiating video generation job for press release ID: {}", pressReleaseId);
+        return generateVideo(pressReleaseId, username, null, null);
+    }
+
+    @Override
+    @Transactional
+    public GeneratedVideoResponse generateVideo(Long pressReleaseId, String username, String languageOverride, String scriptOverride) {
+        log.info("Initiating video generation job for press release ID: {} (langOverride={}, scriptOverride={})",
+                pressReleaseId, languageOverride, scriptOverride != null);
+
         PressRelease pressRelease = pressReleaseRepository.findById(pressReleaseId)
                 .orElseThrow(() -> new RuntimeException("Press release not found: " + pressReleaseId));
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
-        PythonVideoRequest pythonRequest = new PythonVideoRequest(pressRelease.getContent(), pressRelease.getLanguage());
-        HttpEntity<PythonVideoRequest> requestEntity = new HttpEntity<>(pythonRequest, createJsonHeaders());
+        String language = (languageOverride != null && !languageOverride.isBlank())
+                ? languageOverride
+                : (pressRelease.getLanguage() != null ? pressRelease.getLanguage() : "en");
 
+        record PythonVideoReq(String content, String language, String script_override) {}
+        PythonVideoReq pythonRequest = new PythonVideoReq(
+                pressRelease.getContent(),
+                language,
+                (scriptOverride != null && !scriptOverride.isBlank()) ? scriptOverride : null
+        );
+
+        HttpEntity<PythonVideoReq> requestEntity = new HttpEntity<>(pythonRequest, createJsonHeaders());
         String url = pythonServiceBaseUrl + "/generate-video";
         PythonJobResponse pythonResponse;
         try {
@@ -90,7 +109,7 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
         video.setUser(user);
         video.setStatus(VideoStatus.PROCESSING);
         video.setJobId(pythonResponse.getJob_id());
-        video.setLanguage(pressRelease.getLanguage());
+        video.setLanguage(language);
 
         GeneratedVideo savedVideo = generatedVideoRepository.save(video);
         log.info("Saved video record with ID {} and status PROCESSING", savedVideo.getId());
@@ -98,9 +117,7 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
         return mapToResponse(savedVideo);
     }
 
-    // ----------------------------
-    // GET VIDEO STATUS BY JOB ID
-    // ----------------------------
+    // ---------- STATUS BY JOB ----------
     @Override
     @Transactional
     public GeneratedVideoResponse getVideoStatusByJobId(String jobId) {
@@ -114,9 +131,6 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
         return mapToResponse(video);
     }
 
-    // ----------------------------
-    // UPDATE STATUS HELPER
-    // ----------------------------
     private void updateVideoStatus(GeneratedVideo video) {
         String url = pythonServiceBaseUrl + "/video-status/" + video.getJobId();
         try {
@@ -125,18 +139,13 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
                 log.warn("Received null status response from Python for job ID {}", video.getJobId());
                 return;
             }
-
             switch (statusResponse.getStatus()) {
                 case "completed":
                     video.setStatus(VideoStatus.COMPLETED);
-                    // ✅ Extract just the filename from Python's response
                     String pythonUrl = statusResponse.getVideo_url();
                     String filename = pythonUrl.substring(pythonUrl.lastIndexOf('/') + 1);
-                   
-                    // ✅ Construct the public URL
                     String publicUrl = videoPublicBaseUrl + "/" + filename;
                     video.setVideoUrl(publicUrl);
-                   
                     log.info("✅ Video {} marked COMPLETED. Public URL: {}", video.getId(), publicUrl);
                     break;
                 case "failed":
@@ -147,6 +156,9 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
                 case "processing":
                     log.info("Video ID {} still processing...", video.getId());
                     break;
+                case "pending":
+                    log.info("Video ID {} still pending...", video.getId());
+                    break;
                 default:
                     log.warn("Received unknown status '{}' for job ID {}", statusResponse.getStatus(), video.getJobId());
                     break;
@@ -156,9 +168,7 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
         }
     }
 
-    // ----------------------------
-    // GETTERS / PUBLISHING
-    // ----------------------------
+    // ---------- GETTERS / PUBLISH ----------
     @Override
     @Transactional(readOnly = true)
     public List<GeneratedVideoResponse> getVideosForCurrentUser(String username) {
@@ -186,9 +196,18 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
             throw new IllegalStateException("Video must be COMPLETED before publishing.");
         }
 
+        // ✅ Safe defaults so empty {} works
+        String finalPlatform = (request != null && request.getPlatform() != null && !request.getPlatform().isBlank())
+                ? request.getPlatform()
+                : "INTERNAL";
+
+        String finalPublishedUrl = (request != null && request.getPublishedUrl() != null && !request.getPublishedUrl().isBlank())
+                ? request.getPublishedUrl()
+                : video.getVideoUrl();
+
         video.setStatus(VideoStatus.PUBLISHED);
-        video.setPublishedUrl(request.getPublishedUrl());
-        video.setPlatform(request.getPlatform());
+        video.setPublishedUrl(finalPublishedUrl);
+        video.setPlatform(finalPlatform);
         video.setPublishedAt(LocalDateTime.now());
 
         GeneratedVideo saved = generatedVideoRepository.save(video);
@@ -196,29 +215,53 @@ public class GeneratedVideoServiceImpl implements GeneratedVideoService {
     }
 
     @Override
-    public String improviseContent(Long pressReleaseId, String username) {
+    public String improviseContent(Long pressReleaseId, String username, String language, String styleHints) {
         PressRelease pressRelease = pressReleaseRepository.findById(pressReleaseId)
                 .orElseThrow(() -> new RuntimeException("Press release not found: " + pressReleaseId));
-        return "Improvised version of: " + pressRelease.getTitle();
+
+        String resolvedLang = (language != null && !language.isBlank())
+                ? language
+                : (pressRelease.getLanguage() != null ? pressRelease.getLanguage() : "en");
+
+        record ImproviseReq(String content, String language, String style_hints) {}
+        ImproviseReq body = new ImproviseReq(
+                pressRelease.getContent(),
+                resolvedLang,
+                (styleHints != null && !styleHints.isBlank()) ? styleHints : null
+        );
+
+        String url = pythonServiceBaseUrl + "/improvise";
+        try {
+            HttpEntity<ImproviseReq> entity = new HttpEntity<>(body, createJsonHeaders());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resp = restTemplate.postForObject(url, entity, Map.class);
+            if (resp == null || !resp.containsKey("improved_script")) {
+                throw new IllegalStateException("Invalid improvise response");
+            }
+            return String.valueOf(resp.get("improved_script"));
+        } catch (Exception e) {
+            log.error("Improvise failed via Python: {}", e.getMessage(), e);
+            throw new RuntimeException("Improvise failed: " + e.getMessage(), e);
+        }
     }
+
     @Override
-public GeneratedVideoResponse getVideoById(Long id, String language) {
-    // Example implementation — you can modify it as needed
-    Optional<GeneratedVideo> videoOpt = generatedVideoRepository.findById(id);
-
-    if (videoOpt.isEmpty()) {
-        throw new RuntimeException("Video not found with ID: " + id);
+    public GeneratedVideoResponse getVideoById(Long videoId, String username) {
+        GeneratedVideo video = generatedVideoRepository.findById(videoId)
+                .orElseThrow(() -> new RuntimeException("Video not found with ID: " + videoId));
+        return mapToResponse(video);
     }
 
-    GeneratedVideo video = videoOpt.get();
+    @Override
+    @Transactional(readOnly = true)
+    public List<GeneratedVideoResponse> getPublishedVideos() {
+        return generatedVideoRepository.findByStatus(VideoStatus.PUBLISHED)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
 
-    return mapToResponse(video);
-}
-
-
-    // ----------------------------
-    // HELPERS
-    // ----------------------------
+    // ---------- HELPERS ----------
     private HttpHeaders createJsonHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

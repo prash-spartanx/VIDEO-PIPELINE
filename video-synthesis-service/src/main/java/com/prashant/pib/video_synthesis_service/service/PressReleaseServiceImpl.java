@@ -9,10 +9,12 @@ import com.prashant.pib.video_synthesis_service.repository.PressReleaseRepositor
 import com.prashant.pib.video_synthesis_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,11 +32,16 @@ public class PressReleaseServiceImpl implements PressReleaseService {
     @Transactional
     public PressReleaseResponse createPressRelease(PressReleaseRequest request, String username) {
         log.info("Creating manual press release for user: {}", username);
-        
+
         if (request.getTitle() == null || request.getTitle().isBlank()) {
-            throw new IllegalArgumentException("Title cannot be empty");
+            // be forgiving but never store null title (DB not-null)
+            if (request.getContent() != null && !request.getContent().isBlank()) {
+                String auto = autoTitleFromContent(request.getContent());
+                request.setTitle(auto);
+            } else {
+                throw new IllegalArgumentException("Title cannot be empty");
+            }
         }
-        
         if (request.getContent() == null || request.getContent().isBlank()) {
             throw new IllegalArgumentException("Content cannot be empty");
         }
@@ -42,24 +49,21 @@ public class PressReleaseServiceImpl implements PressReleaseService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
-        PressRelease pressRelease = new PressRelease();
-        pressRelease.setPrid(
-                request.getPrid() != null && !request.getPrid().isBlank() 
-                    ? request.getPrid() 
-                    : "manual-" + System.currentTimeMillis()
+        PressRelease pr = new PressRelease();
+        pr.setPrid(
+                request.getPrid() != null && !request.getPrid().isBlank()
+                        ? request.getPrid()
+                        : "manual-" + System.currentTimeMillis()
         );
-        pressRelease.setTitle(request.getTitle());
-        pressRelease.setContent(request.getContent());
-        pressRelease.setLink(request.getLink());
-        pressRelease.setLanguage(request.getLanguage() != null ? request.getLanguage() : "en");
-        pressRelease.setPublishedAt(request.getPublishedAt() != null 
-                ? request.getPublishedAt() 
-                : java.time.LocalDateTime.now());
-        pressRelease.setUser(user);
+        pr.setTitle(trimCap(request.getTitle(), 1024));
+        pr.setContent(request.getContent());
+        pr.setLink(request.getLink());
+        pr.setLanguage(request.getLanguage() != null ? request.getLanguage() : "en");
+        pr.setPublishedAt(request.getPublishedAt() != null ? request.getPublishedAt() : LocalDateTime.now());
+        pr.setUser(user);
 
-        PressRelease saved = pressReleaseRepository.save(pressRelease);
+        PressRelease saved = pressReleaseRepository.save(pr);
         log.info("✓ Created manual PRID {} for user {}", saved.getPrid(), username);
-
         return mapToResponse(saved);
     }
 
@@ -67,14 +71,12 @@ public class PressReleaseServiceImpl implements PressReleaseService {
     @Transactional(readOnly = true)
     public PressReleaseResponse getPressRelease(Long id) {
         log.debug("Fetching press release with ID: {}", id);
-        
         PressRelease pr = pressReleaseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Press release not found with ID: " + id));
 
         if (pr.getContent() == null || pr.getContent().isBlank()) {
             log.warn("⚠ PRID {} has empty content — video generation may fail", pr.getPrid());
         }
-
         return mapToResponse(pr);
     }
 
@@ -82,13 +84,11 @@ public class PressReleaseServiceImpl implements PressReleaseService {
     @Transactional(readOnly = true)
     public List<PressReleaseResponse> getAllPressReleases() {
         log.debug("Fetching all press releases");
-        
         List<PressReleaseResponse> responses = pressReleaseRepository
                 .findAll(Sort.by(Sort.Direction.DESC, "publishedAt"))
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-        
         log.info("✓ Fetched {} total press releases", responses.size());
         return responses;
     }
@@ -97,23 +97,25 @@ public class PressReleaseServiceImpl implements PressReleaseService {
     @Transactional(readOnly = true)
     public List<PressReleaseResponse> getPressReleasesByUser(String username) {
         log.debug("Fetching press releases for user: {}", username);
-        
+
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
-        // Use the existing repository method with Sort instead of Pageable
         List<PressReleaseResponse> responses = pressReleaseRepository
                 .findByUserId(user.getId(), Sort.by(Sort.Direction.DESC, "publishedAt"))
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-        
+
         log.info("✓ Fetched {} press releases for user {}", responses.size(), username);
         return responses;
     }
 
+    /**
+     * IMPORTANT: we skip invalid content and ensure title is non-null before persisting.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public List<PressReleaseResponse> saveFetchedPressReleases(List<PibPressReleaseDto> dtos, String username) {
         if (dtos == null || dtos.isEmpty()) {
             log.warn("⚠ No DTOs to process for user {}", username);
@@ -125,93 +127,120 @@ public class PressReleaseServiceImpl implements PressReleaseService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
-        List<PressRelease> savedPressReleases = new ArrayList<>();
-        int newCount = 0;
-        int updatedCount = 0;
-        int skippedCount = 0;
+        List<PressRelease> persisted = new ArrayList<>();
+        int newCount = 0, updatedCount = 0, skippedCount = 0;
 
         for (PibPressReleaseDto dto : dtos) {
             try {
-                Optional<PressRelease> result = processFetchedDto(dto, user);
-                if (result.isPresent()) {
-                    PressRelease pr = result.get();
-                    savedPressReleases.add(pr);
-                    
-                    // Check if it was an update or new entry
-                    if (pr.getId() != null && pressReleaseRepository.existsById(pr.getId())) {
+                if (dto == null) { skippedCount++; continue; }
+
+                final String prid = safeTrim(dto.getPrid());
+                if (prid == null || prid.isEmpty()) { skippedCount++; continue; }
+
+                final String description = safeTrim(dto.getDescription());
+                if (description == null || description.isEmpty() || !PibFetcherServiceImpl.ContentValidator.isLikelyValid(description)) {
+                    log.warn("⚠ Skipping PRID {} — empty/blocked content", prid);
+                    skippedCount++;
+                    continue;
+                }
+
+                String incomingTitle = safeTrim(dto.getTitle());
+                if (incomingTitle == null || incomingTitle.isBlank()) {
+                    incomingTitle = autoTitleFromContent(description);
+                }
+
+                Optional<PressRelease> existingOpt = pressReleaseRepository.findByPrid(prid);
+                if (existingOpt.isPresent()) {
+                    PressRelease existing = existingOpt.get();
+                    boolean changed = false;
+
+                    if (isNullOrBlank(existing.getContent()) || existing.getContent().length() < description.length()) {
+                        existing.setContent(description);
+                        changed = true;
+                    }
+                    if (!incomingTitle.equals(existing.getTitle())) {
+                        existing.setTitle(trimCap(incomingTitle, 1024));
+                        changed = true;
+                    }
+                    String newLink = safeTrim(dto.getLink());
+                    if (newLink != null && !newLink.equals(existing.getLink())) {
+                        existing.setLink(newLink);
+                        changed = true;
+                    }
+                    if (dto.getPublishedAt() != null && !dto.getPublishedAt().equals(existing.getPublishedAt())) {
+                        existing.setPublishedAt(dto.getPublishedAt());
+                        changed = true;
+                    }
+                    String newLang = safeTrim(dto.getLanguage());
+                    if (newLang != null && !newLang.equals(existing.getLanguage())) {
+                        existing.setLanguage(newLang);
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        PressRelease saved = pressReleaseRepository.save(existing);
+                        persisted.add(saved);
                         updatedCount++;
+                        log.info("↻ Updated PRID {} ({} chars)", prid, description.length());
                     } else {
-                        newCount++;
+                        skippedCount++;
+                        log.debug("⊘ Skipping PRID {} (no meaningful changes)", prid);
                     }
                 } else {
-                    skippedCount++;
+                    PressRelease pr = new PressRelease();
+                    pr.setPrid(prid);
+                    pr.setTitle(trimCap(incomingTitle, 1024));
+                    pr.setContent(description);
+                    pr.setLink(safeTrim(dto.getLink()));
+                    pr.setLanguage(safeOrDefault(dto.getLanguage(), "en"));
+                    pr.setPublishedAt(dto.getPublishedAt() != null ? dto.getPublishedAt() : LocalDateTime.now());
+                    pr.setUser(user);
+
+                    PressRelease saved = pressReleaseRepository.save(pr);
+                    persisted.add(saved);
+                    newCount++;
+                    log.info("+ Saved PRID {} ({} chars)", prid, description.length());
                 }
-            } catch (Exception e) {
-                log.error("Error processing DTO for PRID {}: {}", dto.getPrid(), e.getMessage());
+            } catch (DataIntegrityViolationException dive) {
                 skippedCount++;
+                log.error("DB constraint error for PRID {}: {}", dto != null ? dto.getPrid() : "null", dive.getMessage());
+            } catch (Exception e) {
+                skippedCount++;
+                log.error("Error processing PR DTO (PRID={}): {}", dto != null ? dto.getPrid() : "null", e.getMessage(), e);
             }
         }
 
-        log.info("✅ Processed {} press releases: {} new, {} updated, {} skipped", 
+        log.info("✅ Processed {} press releases: {} new, {} updated, {} skipped",
                 dtos.size(), newCount, updatedCount, skippedCount);
 
-        return savedPressReleases.stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+        return persisted.stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    private Optional<PressRelease> processFetchedDto(PibPressReleaseDto dto, User user) {
-        if (dto.getPrid() == null || dto.getPrid().isBlank()) {
-            log.warn("⚠ Skipping invalid DTO: missing PRID");
-            return Optional.empty();
-        }
+    // ---------- helpers ----------
 
-        // Check if already exists
-        Optional<PressRelease> existingOpt = pressReleaseRepository.findByPrid(dto.getPrid());
-        
-        if (existingOpt.isPresent()) {
-            PressRelease existing = existingOpt.get();
-            
-            // Only update if existing has no content but new DTO has content
-            if ((existing.getContent() == null || existing.getContent().isBlank())
-                    && dto.getDescription() != null && !dto.getDescription().isBlank()) {
-                
-                existing.setTitle(dto.getTitle());
-                existing.setContent(dto.getDescription());
-                existing.setLink(dto.getLink());
-                existing.setPublishedAt(dto.getPublishedAt());
-                
-                PressRelease updated = pressReleaseRepository.save(existing);
-                log.info("↻ Updated PRID {} with new content ({} chars)", 
-                        dto.getPrid(), dto.getDescription().length());
-                return Optional.of(updated);
-            }
-            
-            log.debug("⊘ Skipping existing PRID {} (already has valid content)", dto.getPrid());
-            return Optional.empty();
-        }
+    private boolean isNullOrBlank(String s) {
+        return s == null || s.isBlank();
+    }
 
-        // Validate new entry has content
-        if (dto.getDescription() == null || dto.getDescription().isBlank()) {
-            log.warn("⚠ Skipping PRID {} — scraping failed (empty content)", dto.getPrid());
-            return Optional.empty();
-        }
+    private String safeTrim(String s) {
+        return s == null ? null : s.trim();
+    }
 
-        // Create new press release
-        PressRelease pr = new PressRelease();
-        pr.setPrid(dto.getPrid());
-        pr.setTitle(dto.getTitle());
-        pr.setContent(dto.getDescription());
-        pr.setLink(dto.getLink());
-        pr.setLanguage(dto.getLanguage() != null ? dto.getLanguage() : "en");
-        pr.setPublishedAt(dto.getPublishedAt() != null 
-                ? dto.getPublishedAt() 
-                : java.time.LocalDateTime.now());
-        pr.setUser(user);
-        
-        PressRelease saved = pressReleaseRepository.save(pr);
-        log.info("+ Saved new PRID {} ({} chars)", dto.getPrid(), dto.getDescription().length());
-        return Optional.of(saved);
+    private String safeOrDefault(String s, String def) {
+        String t = safeTrim(s);
+        return (t == null || t.isEmpty()) ? def : t;
+    }
+
+    private String autoTitleFromContent(String content) {
+        if (content == null) return "Press Release";
+        String t = content.trim().replaceAll("\\s+", " ");
+        if (t.length() > 150) t = t.substring(0, 150) + "…";
+        return t.isEmpty() ? "Press Release" : t;
+    }
+
+    private String trimCap(String s, int max) {
+        if (s == null) return null;
+        return s.length() > max ? s.substring(0, max) : s;
     }
 
     private PressReleaseResponse mapToResponse(PressRelease pr) {

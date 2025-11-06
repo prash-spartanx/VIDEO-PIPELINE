@@ -1,58 +1,110 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PIB Video Synthesis</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>TenjikuAi - Government Updates Reimagined</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Main styles -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
+  <!-- ======= AUTH ======= -->
+  <div id="auth-container" class="auth-wrapper hidden">
+    <div class="auth-card glass">
+      <div class="brand">TenjikuAi</div>
+      <div id="login-view">
+        <h2>Log in</h2>
+        <form id="login-form">
+          <input id="login-username" type="text" placeholder="Username" required/>
+          <input id="login-password" type="password" placeholder="Password" required/>
+          <button type="submit">Log In</button>
+        </form>
+        <p class="muted">No account? <a id="show-register" href="javascript:void(0)">Sign up</a></p>
+      </div>
 
-<div id="app">
-
-    <div id="auth-container">
-        <div id="login-view">
-            <h2>Login</h2>
-            <form id="login-form">
-                <input type="text" id="login-username" placeholder="Username" required>
-                <input type="password" id="login-password" placeholder="Password" required>
-                <button type="submit">Login</button>
-                <p>Don't have an account? <a href="#" id="show-register">Register here</a></p>
-            </form>
-        </div>
-
-        <div id="register-view" class="hidden">
-            <h2>Register</h2>
-            <form id="register-form">
-                <input type="text" id="register-username" placeholder="Username" required>
-                <input type="email" id="register-email" placeholder="Email" required>
-                <input type="password" id="register-password" placeholder="Password" required>
-                <input type="text" id="register-role" placeholder="Role (e.g., ADMIN or USER)">
-                <button type="submit">Register</button>
-                <p>Already have an account? <a href="#" id="show-login">Login here</a></p>
-            </form>
-        </div>
+      <div id="register-view" class="hidden">
+        <h2>Sign up</h2>
+        <form id="register-form">
+          <input id="register-username" type="text" placeholder="Username" required/>
+          <input id="register-email" type="email" placeholder="Email" required/>
+          <input id="register-password" type="password" placeholder="Password" required/>
+          <!-- Optional (ADMIN / USER). Defaults to USER if empty -->
+          <input id="register-role" type="text" placeholder="Role (optional)"/>
+          <button type="submit">Create Account</button>
+        </form>
+        <p class="muted">Already have an account? <a id="show-login" href="javascript:void(0)">Log in</a></p>
+      </div>
     </div>
+  </div>
 
-    <div id="main-app" class="hidden">
-        <nav>
-            <div class="nav-left">
-                <h1 id="welcome-message">Welcome</h1>
-            </div>
-            <div class="nav-right">
-                <button id="my-videos-btn">My Videos</button>
-                <button id="admin-dashboard-btn" class="hidden">Admin Dashboard</button>
-                <button id="logout-btn">Logout</button>
-            </div>
-        </nav>
+  <!-- ======= MAIN APP ======= -->
+  <div id="main-app" class="hidden">
+    <!-- Glass Nav overlaying the hero -->
+    <nav class="nav glass">
+      <div class="nav-left">
+        <a class="nav-link" href="javascript:void(0)" id="home-link">Home</a>
+        <a class="nav-link" href="javascript:void(0)" id="public-gallery-btn">Public Gallery</a>
+        <a class="nav-link" href="javascript:void(0)" id="my-videos-btn">My Videos</a>
+      </div>
 
-        <main id="content-area">
-            <!-- Dynamic content will be loaded here -->
-        </main>
-    </div>
+      <div class="brand">TenjikuAi</div>
 
-</div>
+      <div class="nav-right">
+        <span id="welcome-message" class="muted"></span>
+        <!-- stays hidden unless body.has('is-admin') -->
+        <button id="admin-dashboard-btn" class="btn subtle admin-only">Admin</button>
+        <button id="logout-btn" class="btn danger">Logout</button>
+      </div>
+    </nav>
 
-<script src="script.js"></script>
+    <!-- Hero with video background -->
+    <header class="hero">
+      <!-- Use your video from /static/assets/flag.mp4 -->
+      <video class="hero-bg" autoplay muted loop playsinline preload="auto" poster="assets/flag.jpg">
+        <source src="assets/flag.mp4" type="video/mp4" />
+      </video>
+      <div class="hero-content">
+        <div id="hero-cta" class="hero-cta"></div>
+      </div>
+    </header>
+
+    <!-- Main content container below the hero -->
+    <main id="content-area" class="content glass">
+      <!-- JS renders dashboard / lists here -->
+      <!-- Anything admin the JS inserts should get class "admin-header" or "admin-only"
+           so CSS can hide it for normal users -->
+    </main>
+
+    <footer class="footer">
+      <small>© <span id="yr"></span> TenjikuAi · Built with love for India 🇮🇳</small>
+    </footer>
+  </div>
+
+  <!-- Minimal role marker (no backend change):
+       If your auth already stores role in localStorage, this will add a body flag.
+       It does NOT change CORS, endpoints, or auth logic. -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const y = document.getElementById('yr');
+      if (y) y.textContent = new Date().getFullYear();
+
+      // Try common keys you might already be storing:
+      const role =
+        (localStorage.getItem('role') ||
+         localStorage.getItem('userRole') ||
+         localStorage.getItem('authRole') ||
+         '').toUpperCase();
+
+      if (role === 'ADMIN') {
+        document.body.classList.add('is-admin');
+      } else {
+        document.body.classList.remove('is-admin');
+      }
+    });
+  </script>
+
+  <!-- Your existing JS file -->
+  <script src="script.js"></script>
 </body>
 </html>

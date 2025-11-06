@@ -8,9 +8,13 @@ public interface GeneratedVideoService {
 
     GeneratedVideoResponse generateVideo(Long pressReleaseId, String username);
 
+    // NEW overload (preferred by controller)
+    GeneratedVideoResponse generateVideo(Long pressReleaseId, String username, String language, String scriptOverride);
+
     GeneratedVideoResponse publishVideo(Long videoId, PublishVideoRequest request, String username);
 
-    String improviseContent(Long pressReleaseId, String username);
+    // CHANGE signature to support language + hints
+    String improviseContent(Long pressReleaseId, String username, String language, String styleHints);
 
     GeneratedVideoResponse getVideoStatusByJobId(String jobId);
 
@@ -36,5 +40,7 @@ public interface GeneratedVideoService {
      * @return A list of all videos.
      */
     List<GeneratedVideoResponse> getAllVideos();
-}
 
+    // ✅ NEW
+    List<GeneratedVideoResponse> getPublishedVideos();
+}

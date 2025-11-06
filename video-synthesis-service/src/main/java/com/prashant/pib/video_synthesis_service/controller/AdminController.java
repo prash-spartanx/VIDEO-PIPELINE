@@ -1,8 +1,8 @@
 package com.prashant.pib.video_synthesis_service.controller;
 
+import com.prashant.pib.video_synthesis_service.dto.GeneratedVideoResponse;
 import com.prashant.pib.video_synthesis_service.dto.PibPressReleaseDto;
 import com.prashant.pib.video_synthesis_service.dto.PressReleaseResponse;
-import com.prashant.pib.video_synthesis_service.dto.GeneratedVideoResponse;
 import com.prashant.pib.video_synthesis_service.dto.PublishVideoRequest;
 import com.prashant.pib.video_synthesis_service.service.GeneratedVideoService;
 import com.prashant.pib.video_synthesis_service.service.PibFetcherService;
@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -28,19 +29,26 @@ public class AdminController {
     private final GeneratedVideoService generatedVideoService;
 
     @PostMapping("/fetch-latest-prs")
-    public ResponseEntity<List<PressReleaseResponse>> fetchAndSaveLatestPressReleases(Authentication authentication) {
+    public ResponseEntity<?> fetchAndSaveLatestPressReleases(Authentication authentication) {
         String username = authentication.getName();
         log.info("Admin {} initiated PIB fetch", username);
+
+        if (!pibFetcherService.tryStartFetch()) {
+            return ResponseEntity.status(429).body("A PIB fetch is already running. Please try again in a few seconds.");
+        }
 
         try {
             List<PibPressReleaseDto> dtos = pibFetcherService.fetchLatestPressReleases();
             log.info("Fetched {} DTOs from PIB", dtos.size());
+
             List<PressReleaseResponse> saved = pressReleaseService.saveFetchedPressReleases(dtos, username);
-            log.info("Admin {} saved {} new press releases", username, saved.size());
+            log.info("Admin {} saved/updated {} press releases", username, saved.size());
             return ResponseEntity.ok(saved);
         } catch (Exception e) {
             log.error("Failed to fetch PIB data for {}: {}", username, e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.internalServerError().body("PIB fetch failed: " + e.getMessage());
+        } finally {
+            pibFetcherService.finishFetch();
         }
     }
 
@@ -53,9 +61,13 @@ public class AdminController {
 
     @PostMapping("/generate")
     public ResponseEntity<GeneratedVideoResponse> generateVideo(
-            @RequestParam Long pressReleaseId, Authentication authentication) {
+            @RequestParam Long pressReleaseId,
+            @RequestParam(required = false) String language,
+            @RequestParam(required = false) String scriptOverride,
+            Authentication authentication) {
         String username = authentication.getName();
-        GeneratedVideoResponse response = generatedVideoService.generateVideo(pressReleaseId, username);
+        GeneratedVideoResponse response =
+                generatedVideoService.generateVideo(pressReleaseId, username, language, scriptOverride);
         return ResponseEntity.ok(response);
     }
 
@@ -81,8 +93,12 @@ public class AdminController {
     @PostMapping("/improvise")
     public ResponseEntity<String> improviseContent(
             @RequestParam Long pressReleaseId,
+            @RequestParam(required = false) String language,
+            @RequestBody(required = false) Map<String, String> body,
             Authentication authentication) {
         String username = authentication.getName();
-        return ResponseEntity.ok(generatedVideoService.improviseContent(pressReleaseId, username));
+        String styleHints = body != null ? body.getOrDefault("styleHints", null) : null;
+        String improved = generatedVideoService.improviseContent(pressReleaseId, username, language, styleHints);
+        return ResponseEntity.ok(improved);
     }
 }
