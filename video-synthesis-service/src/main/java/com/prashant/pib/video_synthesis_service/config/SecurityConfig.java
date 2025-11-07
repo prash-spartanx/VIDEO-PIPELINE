@@ -93,13 +93,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // --- CORS FIX ---
                         // Explicitly allow all preflight OPTIONS requests to pass authentication
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // --- STATIC RESOURCES FIX ---
-                        // Permit all static files (HTML, CSS, JS, images) without authentication
-                        // This allows your frontend to load at localhost:8080
-                        .requestMatchers("/**.css", "/**.js", "/**.html", "/**.png", "/**.jpg", "/**.jpeg", "/**.gif", "/**.ico", "/**.svg").permitAll()
-                        .requestMatchers("/").permitAll()  // Root path for index.html
+                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+        
+        // Static resources
+                    .requestMatchers("/**.css", "/**.js", "/**.html", "/**.png", "/**.jpg", "/**.jpeg", "/**.gif", "/**.ico", "/**.svg").permitAll()
+                    .requestMatchers("/").permitAll()
+                    .requestMatchers("/assets/**").permitAll()  // NEW - Allow assets folder
+                    .requestMatchers("/**.mp4").permitAll()     // NEW - Allow video files
+        
+
 
                         // Your existing rules
                         .requestMatchers("/health", "/actuator/health").permitAll()
