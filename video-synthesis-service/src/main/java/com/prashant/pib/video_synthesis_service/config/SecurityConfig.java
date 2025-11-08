@@ -3,7 +3,7 @@ package com.prashant.pib.video_synthesis_service.config;
 import com.prashant.pib.video_synthesis_service.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; // --- CORS FIX --- Import HttpMethod
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -11,19 +11,14 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration; // --- CORS FIX ---
-import org.springframework.web.cors.CorsConfigurationSource; // --- CORS FIX ---
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // --- CORS FIX ---
-
-import java.util.List; // --- CORS FIX ---
-
-import static org.springframework.security.config.Customizer.withDefaults; // --- CORS FIX ---
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -57,57 +52,49 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    // --- CORS FIX ---
-    // This bean defines the CORS rules for your application
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-
-        // This allows requests from any origin.
-        // For production, you should restrict this to your frontend's domain:
-        // configuration.setAllowedOrigins(List.of("https://your-frontend-domain.com"));
-        configuration.setAllowedOrigins(List.of("*"));
-
-        // Allow all standard HTTP methods
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-
-        // Allow necessary headers like Authorization (for JWT) and Content-Type
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply these rules to all API paths
-        source.registerCorsConfiguration("/**", configuration);
-
-        return source;
-    }
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // --- CORS FIX ---
-                // Apply the CORS configuration defined in the bean above
-                .cors(withDefaults())
-
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Disable CORS and CSRF for simplicity (re-enable in production!)
+                .cors(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                
+                .sessionManagement(session -> 
+                    session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                
                 .authorizeHttpRequests(auth -> auth
-                        // --- CORS FIX ---
-                        // Explicitly allow all preflight OPTIONS requests to pass authentication
-
-                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-        
-        // Static resources
-                    .requestMatchers("/**.css", "/**.js", "/**.html", "/**.png", "/**.jpg", "/**.jpeg", "/**.gif", "/**.ico", "/**.svg").permitAll()
-                    .requestMatchers("/").permitAll()
-                    .requestMatchers("/assets/**").permitAll()  // NEW - Allow assets folder
-                    .requestMatchers("/**.mp4").permitAll()     // NEW - Allow video files
-        
-
-
-                        // Your existing rules
+                        // Allow all static resources WITHOUT authentication
+                        .requestMatchers(
+                                new AntPathRequestMatcher("/"),
+                                new AntPathRequestMatcher("/index.html"),
+                                new AntPathRequestMatcher("/*.html"),
+                                new AntPathRequestMatcher("/*.css"),
+                                new AntPathRequestMatcher("/*.js"),
+                                new AntPathRequestMatcher("/*.png"),
+                                new AntPathRequestMatcher("/*.jpg"),
+                                new AntPathRequestMatcher("/*.jpeg"),
+                                new AntPathRequestMatcher("/*.gif"),
+                                new AntPathRequestMatcher("/*.ico"),
+                                new AntPathRequestMatcher("/*.svg"),
+                                new AntPathRequestMatcher("/*.mp4"),
+                                new AntPathRequestMatcher("/*.webm"),
+                                new AntPathRequestMatcher("/assets/**"),
+                                new AntPathRequestMatcher("/static/**")
+                        ).permitAll()
+                        
+                        // Health check
                         .requestMatchers("/health", "/actuator/health").permitAll()
+                        
+                        // Auth endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        
+                        // Public API endpoints
+                        .requestMatchers("/api/public/**").permitAll()
+                        
+                        // Admin endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        
+                        // Everything else needs authentication
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
