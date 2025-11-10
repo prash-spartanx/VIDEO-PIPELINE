@@ -50,6 +50,83 @@ body.is-admin .admin-header {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
+/* ======= LOADING ANIMATIONS ======= */
+/* Magnifying glass animation for fetching */
+@keyframes magnifySearch {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.1); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(1.1); }
+}
+
+/* Running emoji animation for generating */
+@keyframes runningMan {
+  0% { transform: translateX(0) scaleX(1); }
+  25% { transform: translateX(5px) scaleX(0.95) translateY(-2px); }
+  50% { transform: translateX(0) scaleX(1); }
+  75% { transform: translateX(-5px) scaleX(0.95) translateY(-2px); }
+  100% { transform: translateX(0) scaleX(1); }
+}
+
+/* Pulsing animation for processing */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Spinning animation for general loading */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Animation classes to be added by JS */
+.btn-fetching::before {
+  content: '🔍 ';
+  display: inline-block;
+  animation: magnifySearch 2s ease-in-out infinite;
+}
+
+.btn-generating::before {
+  content: '🏃 ';
+  display: inline-block;
+  animation: runningMan 0.8s ease-in-out infinite;
+}
+
+.btn-processing::before {
+  content: '⚙️ ';
+  display: inline-block;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-publishing::before {
+  content: '📤 ';
+  display: inline-block;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Status animations */
+.status-PENDING, .status-PROCESSING {
+  position: relative;
+  overflow: hidden;
+}
+
+.status-PENDING::after, .status-PROCESSING::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
 /* ======= Auth Screen ======= */
 .auth-wrapper {
   position: fixed;

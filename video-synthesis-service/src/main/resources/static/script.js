@@ -307,6 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const fetchBtn = document.getElementById('fetch-pib-btn');
         if (fetchBtn) {
             fetchBtn.disabled = true;
+            // Add magnifying glass animation
+            fetchBtn.classList.add('btn-fetching');
             fetchBtn.textContent = 'Fetching...';
         }
 
@@ -320,6 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('An error occurred while fetching from PIB.');
             if (fetchBtn) {
                 fetchBtn.disabled = false;
+                fetchBtn.classList.remove('btn-fetching');
                 fetchBtn.textContent = 'Fetch Latest from PIB';
             }
         }
@@ -411,6 +414,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleGenerateClick(button, scriptOverride = null) {
+      // Add running animation
+      button.classList.add('btn-generating');
       button.disabled = true;
       button.textContent = 'Generating...';
 
@@ -440,6 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
       } catch (error) {
           statusContainer.innerHTML = `<span class="status status-FAILED">Submission Failed</span>`;
+          button.classList.remove('btn-generating');
           button.disabled = false;
           button.textContent = 'Generate Video';
       }
@@ -453,12 +459,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const styleHints = prompt('Style hints (tone/pace/energy, optional):', 'concise, formal, neutral tone');
       if (styleHints === null) return;
 
+      // Add processing animation
+      button.classList.add('btn-processing');
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = 'Processing...';
+
       try {
         const params = new URLSearchParams();
         params.set('pressReleaseId', pressReleaseId);
         if (lang) params.set('language', lang);
 
         const scriptText = await apiRequestText(`/admin/improvise?${params.toString()}`, 'POST', { styleHints });
+
+        // Remove animation before showing prompt
+        button.classList.remove('btn-processing');
+        button.disabled = false;
+        button.textContent = originalText;
 
         const edited = prompt('Review/EDIT the improved narration (will be used as voiceover):', scriptText);
         if (edited === null || !edited.trim()) return;
@@ -469,6 +486,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         alert('Improvise failed. Check logs.');
         console.error(err);
+        button.classList.remove('btn-processing');
+        button.disabled = false;
+        button.textContent = originalText;
       }
     }
 
@@ -478,6 +498,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const embeddedId = li.dataset.videoId && li.dataset.videoId.trim();
       const videoId = embeddedId || prompt('Enter the Completed Video ID to publish:');
       if (!videoId) return;
+
+      // Add publishing animation
+      button.classList.add('btn-publishing');
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = 'Publishing...';
 
       try {
         // Empty body is OK; backend will store PUBLISHED with null platform/publishedUrl
@@ -495,6 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {
         console.error(e);
         alert('Publish failed. Double-check the Video ID is the COMPLETED videos ID.');
+        button.classList.remove('btn-publishing');
+        button.disabled = false;
+        button.textContent = originalText;
       }
     }
 
