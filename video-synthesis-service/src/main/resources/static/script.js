@@ -6,16 +6,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPPORTED_LANGUAGES = [
       { label: 'English', value: 'english' },
       { label: 'Hindi', value: 'hindi' },
-      { label: 'Spanish', value: 'spanish' },
-      { label: 'French', value: 'french' },
-      { label: 'German', value: 'german' },
-      { label: 'Italian', value: 'italian' },
-      { label: 'Portuguese', value: 'portuguese' },
-      { label: 'Russian', value: 'russian' },
-      { label: 'Japanese', value: 'japanese' },
-      { label: 'Korean', value: 'korean' },
-      { label: 'Chinese', value: 'chinese' },
-      { label: 'Arabic', value: 'arabic' },
+      { label: 'Bengali', value: 'bengali' },
+      { label: 'Telugu', value: 'telugu' },
+      { label: 'Marathi', value: 'marathi' },
+      { label: 'Tamil', value: 'tamil' },
+      { label: 'Gujarati', value: 'gujarati' },
+      { label: 'Kannada', value: 'kannada' },
+      { label: 'Malayalam', value: 'malayalam' },
+      { label: 'Punjabi', value: 'punjabi' },
+      { label: 'Odia', value: 'odia' },
+      { label: 'Assamese', value: 'assamese' },
+      { label: 'Urdu', value: 'urdu' },
     ];
 
     // --- UI ELEMENTS ---
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         hero.innerHTML = `
           <h1 class="h1">Glow <em>Naturally</em> Feel <br/> Proud Every Day</h1>
-          <p class="muted">Discover India’s latest government updates—clear, credible, and crafted for everyone.</p>
+          <p class="muted">Discover India's latest government updates—clear, credible, and crafted for everyone.</p>
           <div class="search-row">
             <input id="hero-search-text" type="text" placeholder="Search press releases or videos…" />
             <input id="hero-search-date" type="date" />
@@ -493,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await showAdminDashboard();
       } catch (e) {
         console.error(e);
-        alert('Publish failed. Double-check the Video ID is the COMPLETED video’s ID.');
+        alert('Publish failed. Double-check the Video ID is the COMPLETED videos ID.');
       }
     }
 

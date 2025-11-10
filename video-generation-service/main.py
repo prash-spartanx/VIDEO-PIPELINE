@@ -49,11 +49,34 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 UNSPLASH_CLIENT_ID = os.getenv("UNSPLASH_CLIENT_ID", "")
 UNSPLASH_API = "https://api.unsplash.com/search/photos"
 
+# Updated LANGUAGE_MAP with 13 regional languages
 LANGUAGE_MAP = {
-    "english": "en", "hindi": "hi", "spanish": "es", "french": "fr", "german": "de",
-    "italian": "it", "portuguese": "pt", "russian": "ru", "japanese": "ja",
-    "korean": "ko", "chinese": "zh-CN", "arabic": "ar",
-    "en": "en"
+    "english": "en",
+    "hindi": "hi",
+    "bengali": "bn",
+    "telugu": "te",
+    "marathi": "mr",
+    "tamil": "ta",
+    "gujarati": "gu",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "punjabi": "pa",
+    "odia": "or",
+    "assamese": "as",
+    "urdu": "ur",
+    "en": "en",
+    "hi": "hi",
+    "bn": "bn",
+    "te": "te",
+    "mr": "mr",
+    "ta": "ta",
+    "gu": "gu",
+    "kn": "kn",
+    "ml": "ml",
+    "pa": "pa",
+    "or": "or",
+    "as": "as",
+    "ur": "ur"
 }
 
 BG_MUSIC = os.getenv("BG_MUSIC", "")

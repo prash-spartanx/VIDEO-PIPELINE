@@ -30,9 +30,33 @@ os.makedirs(ASSETS_DIR, exist_ok=True)
 
 # --- Language Configuration ---
 LANGUAGE_MAP = {
-    "english": "en", "hindi": "hi", "spanish": "es", "french": "fr",
-    "german": "de", "italian": "it", "portuguese": "pt", "russian": "ru",
-    "japanese": "ja", "korean": "ko", "chinese": "zh-cn", "arabic": "ar"
+   
+    "english": "en",
+    "hindi": "hi",
+    "bengali": "bn",
+    "telugu": "te",
+    "marathi": "mr",
+    "tamil": "ta",
+    "gujarati": "gu",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "punjabi": "pa",
+    "odia": "or",
+    "assamese": "as",
+    "urdu": "ur",
+    "en": "en",
+    "hi": "hi",
+    "bn": "bn",
+    "te": "te",
+    "mr": "mr",
+    "ta": "ta",
+    "gu": "gu",
+    "kn": "kn",
+    "ml": "ml",
+    "pa": "pa",
+    "or": "or",
+    "as": "as",
+    "ur": "ur"
 }
 
 print(f"✅ Config loaded. Videos will be saved to: {VIDEOS_DIR}")
